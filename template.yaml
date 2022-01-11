@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: Telegram Bot Connector
+
+Parameters:
+  TelegramBotToken:
+    Type: String
+    Description: Telegram bot token
+    NoEcho: true
+  TelegramIPsWhitelist:
+    Type: CommaDelimitedList
+    Description: Comma separate list of IPs of permitted senders commands message, leave empty to disable whitelist.
+    Default: "149.154.160.0/20,91.108.4.0/22"
+  TelegramUsernamesWhitelist:
+    Type: CommaDelimitedList
+    Description: Comma separate list of usernames of permitted senders commands message, leave empty to disable whitelist.
+    Default: ""
+
+Globals:
+  Function:
+    Timeout: 3
+    Runtime: nodejs14.x
+    CodeUri: src/
+
+Resources:
+  
+  ##
+  # SSM parameters
+  ##
+
+  TelegramBotTokenParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: !Sub "${AWS::StackName}-telegram-bot-token"
+      Value: !Ref TelegramBotToken
+      
+  ##
+  # EventBus
+  ##
+
+  MessagesEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub "${AWS::StackName}-messages"
+
+  ##
+  # Rest API endpoint
+  ##
+
+  WebhookApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Ref AWS::StackName
+      StageName: webhook
+      Auth:
+        ResourcePolicy:
+          IpRangeWhitelist: !Ref TelegramIPsWhitelist
+      GatewayResponses:
+        DEFAULT_4xx:
+          StatusCode: 403
+          ResponseTemplates: 
+            "text/plain": "Forbidden"
+        DEFAULT_5xx:
+          StatusCode: 500
+          ResponseTemplates:
+            "text/plain": "Internal Server Error"
+      
+
+  MessageReceivedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: api/webhook.handler
+      FunctionName: !Sub "${AWS::StackName}-message-received"
+      Environment:
+        Variables:
+          EVENT_BUS_NAME: !Ref MessagesEventBus
+          EVENT_SOURCE: !Ref AWS::StackName
+          USERNAMES_WHITELIST: !Join [ ",", !Ref TelegramUsernamesWhitelist ]
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref MessagesEventBus
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WebhookApi
+            Method: POST
+            Path: /
+
+  ##
+  # Send message
+  ##
+
+  SendMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: event/message.handler
+      FunctionName: !Sub "${AWS::StackName}-message-send"
+      Environment:
+        Variables:
+          BOT_TOKEN_PARAMETER_NAME: !Ref TelegramBotTokenParameter
+      Policies:
+        - SSMParameterReadPolicy:
+            ParameterName: !Ref TelegramBotTokenParameter
+      Events:
+        SendMessage:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref MessagesEventBus
+            Pattern:
+              detail-type: 
+                - "Send Message"
+
+Outputs:
+  WebhookEndpoint:
+    Description: The Telegram bot Webhook URL
+    Value: !Sub "https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/webhook/"
+  MessagesEventBusName:
+    Description: Name of EventBridge bus where message event are sent
+    Value: !Ref MessagesEventBus

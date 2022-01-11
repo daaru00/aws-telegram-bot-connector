@@ -1,0 +1,8 @@
+{
+	"name": "sam",
+	"version": "1.0.0",
+	"private": true,
+	"devDependencies": {
+		"eslint": "^7.12.0"
+	}
+}
