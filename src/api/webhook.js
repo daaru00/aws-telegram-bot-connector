@@ -12,6 +12,9 @@ const eventBridge = new EventBridgeClient({
  * Constants 
  */
 const USERNAMES_WHITELIST = process.env.USERNAMES_WHITELIST ? `${process.env.USERNAMES_WHITELIST}`.split(',') : []
+const RESPONSE = {
+	statusCode: 200
+}
 
 /**
  * Lambda handler
@@ -24,23 +27,31 @@ export async function handler(event) {
 	const body = JSON.parse(event.body)
 	console.log(JSON.stringify({ body }))
 
+	// Skip update not related to incoming message
+	if (!body.message) {
+		console.log('Message property not found in event, maybe not an incoming message')
+		return RESPONSE
+	}
+
 	// Parse fields
 	const { from } = body.message
 
 	// Deny message from other bots
 	if (from.is_bot === true) {
 		console.log('Message skipped due bot message protection')
-		return {
-			statusCode: 201
-		}
+		return RESPONSE
 	}
 
 	// Check whitelist
-	if (USERNAMES_WHITELIST.length > 0 && USERNAMES_WHITELIST.includes(`${from.username}`) === false) {
-		console.log(`Message skipped due username whitelist: username ${from.username} not whitelisted`)
-		return {
-			statusCode: 201
+	if (USERNAMES_WHITELIST.length > 0) {
+		if (USERNAMES_WHITELIST.includes(`${from.username}`) === false) {
+			console.log(`Message skipped because username ${from.username} is not in whitelist`)
+			return RESPONSE
+		} else {
+			console.log(`Username ${from.username} whitelisted`)
 		}
+	} else {
+		console.log('Warning: Usernames whitelist disabled')
 	}
 
 	// Send event using EventBridge
