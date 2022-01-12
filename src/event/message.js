@@ -55,5 +55,7 @@ export async function handler({ detail }) {
 
 	// Send message using bot API
 	const client = await getTelegramClient()
-	client.post('sendMessage', detail)
+	await client.post('sendMessage', detail)
+
+	console.log('Message sent')
 }
