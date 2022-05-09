@@ -121,8 +121,8 @@ Resources:
               - 'sendMessage'
           InputTransformer:
             InputPathsMap:
-              "chat_id": "$.detail.ChatId"
-              "text": "$.detail.Text"
+              "chat_id": "$.detail.chat_id"
+              "text": "$.detail.text"
             InputTemplate: |
               {
                 "chat_id": "<chat_id>",
@@ -146,8 +146,8 @@ Resources:
               - 'sendChatAction'
           InputTransformer:
             InputPathsMap:
-              "chat_id": "$.detail.ChatId"
-              "action": "$.detail.Action"
+              "chat_id": "$.detail.chat_id"
+              "action": "$.detail.action"
             InputTemplate: |
               {
                 "chat_id": "<chat_id>",
