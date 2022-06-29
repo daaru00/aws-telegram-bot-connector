@@ -220,12 +220,11 @@ Resources:
                 requestTemplates:
                   application/json: !Sub | 
                     #set($context.requestOverride.header.X-Amz-Target = "AWSEvents.PutEvents")
-                    #set($context.requestOverride.header.Content-Type = "application/x-amz-json-1.1")            
-                    #set($inputRoot = $input.path('$'))
+                    #set($context.requestOverride.header.Content-Type = "application/x-amz-json-1.1")
                     {
                       "Entries": [{
                         "EventBusName": "${MessagesEventBus}",
-                        "Detail": "$util.escapeJavaScript($inputRoot)",
+                        "Detail": "$util.escapeJavaScript($input.body)",
                         "DetailType": "Webhook Event Received",
                         "Source": "org.telegram.webhook"
                       }]
