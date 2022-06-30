@@ -96,6 +96,7 @@ Resources:
   BotApiDestination:
     Type: AWS::Events::ApiDestination
     Properties:
+      Name: !Sub "${AWS::StackName}"
       ConnectionArn: !GetAtt BotApiConnection.Arn
       HttpMethod: POST
       InvocationEndpoint: !Sub "${TelegramApiEndpoint}/bot${TelegramBotToken}/*"
