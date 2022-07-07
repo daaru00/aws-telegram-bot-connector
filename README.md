@@ -2,14 +2,13 @@
 
 ![CloudFormation](https://img.shields.io/badge/-CloudFormation-%23FF4F8B)
 ![API Gateway](https://img.shields.io/badge/-API%20Gateway-%23A166FF)
-![Lambda](https://img.shields.io/badge/-Lambda-%23FF9900)
 ![EventBridge](https://img.shields.io/badge/-EventBridge-%23FF4F8B)
 
 This is a serverless application that implements a Telegram bot connector for message receive and send.
 
 ## Created resources
 
-This application create an API Gateway endpoint to listen for webhook request, an Event Bridge bus to send received message and listen for message command.
+This application create an API Gateway endpoint to listen for webhook request, an Event Bridge bus to send received messages.
 
 ![Infrastructure Schema](./doc/schema.png)
 
@@ -26,8 +25,6 @@ sam deploy --guided
 - **TelegramBotToken**: Telegram bot token.
 
 - **TelegramIPsWhitelist**: Comma separate list of IPs of permitted senders IP, leave empty to disable whitelist.
-
-- **TelegramUsernamesWhitelist**: Comma separate list of usernames of permitted senders commands message, leave empty to disable whitelist.
 
 ## Outputs
 
