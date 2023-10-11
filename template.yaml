@@ -225,7 +225,7 @@ Resources:
                     {
                       "Entries": [{
                         "EventBusName": "${MessagesEventBus}",
-                        "Detail": "$util.escapeJavaScript($input.body)",
+                        "Detail": "$util.escapeJavaScript($input.body).replaceAll("\\'","'")",
                         "DetailType": "Webhook Event Received",
                         "Source": "org.telegram.webhook"
                       }]
