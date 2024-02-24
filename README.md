@@ -26,11 +26,19 @@ sam deploy --guided
 
 - **TelegramIPsWhitelist**: Comma separate list of IPs of permitted senders IP, leave empty to disable whitelist.
 
+- **TelegramApiEndpoint**: Telegram API endpoint.
+
+- **UsernameWhitelist**: Allowed usernames, separated by comma.
+
+- **WelcomeText**: Bot welcome text sent when receiving "/start" command.
+
 ## Outputs
 
-- **WebhookEndpoint**: The Telegram bot Webhook URL
+- **WebhookEndpoint**: The Telegram bot Webhook URL.
 
-- **MessagesEventBusName**: Name of EventBridge bus where message event are sent
+- **EventBusName**: Name of EventBridge bus where message event are sent.
+
+- **LogGroupForEvents**: Name of CloudWatch Log Group for EventBridge events logging.
 
 ## Telegram bot configurations
 
