@@ -58,7 +58,19 @@ You should see a response like this:
 
 The `chat.id` is the value to use in **TelegramChatsWhitelist** parameter.
 
-### Set Webhook
+### Check Webhook
+
+A StepFunction triggered by stack created event will automatically register the webhook using the [setWebhook](https://core.telegram.org/bots/api#setwebhook) bot API.
+
+In order to check if the webhook is correctly registered navigating to `https://api.telegram.org/bot<here the bot token>/getWebhookInfo`, you should see a response like this:
+```json
+{"ok":true,"result":{"url":"https://xxxxxxxxxxxx.execute-api.eu-west-1.amazonaws.com/webhook/","has_custom_certificate":false,"pending_update_count":0,"max_connections":40,"ip_address":"0.0.0.0"}}
+```
+
+If the response is empty the webhook wasn't registered correctly:
+```json
+{"ok":true,"result":{"url":"","has_custom_certificate":false,"pending_update_count":0}}
+```
 
 Set the WebHook URL endpoint (retrieved from **WebhookEndpoint** stack output after the first deploy) navigating to: `https://api.telegram.org/bot<here the bot token>/setWebhook?url=<here the webhook endpoint url>`. 
 
@@ -67,35 +79,44 @@ You should see a response like this:
 {"ok":true,"result":true,"description":"Webhook was set"}
 ```
 
-You can also double check the webhook configuration navigating to `https://api.telegram.org/bot<here the bot token>/getWebhookInfo`, You should see a response like this:
-```json
-{"ok":true,"result":{"url":"https://xxxxxxxxxxxx.execute-api.eu-west-1.amazonaws.com/webhook/","has_custom_certificate":false,"pending_update_count":0,"max_connections":40,"ip_address":"0.0.0.0"}}
-```
-
 ## Receive a message
 
-When a message is sent to the bot (and the username whitelist pass) this application send an event to the exported Event Bridge bus with the following format:
+When a message is sent to the bot (and the username whitelist pass) this application send an event to the **exported EventBridge bus** with the following format:
 ```js
 {
-  "source": "my-stack-name",
-  "detail": "Message Received",
-  "details-type": { /* Update object */ }
+    "source": "org.telegram.webhook",
+    "detail-type": "Message Received",
+    "detail": { /* Update object */ }
 }
 ```
 
 Event's details as the same format as [Update](https://core.telegram.org/bots/api#update) object.
 
-## Send a message
+## Send chat action
 
-In order to send a message through the Telegram bot send an event to the exported Event Bridge with the following format:
-```js
+To trigger a chat event send an event send an event to the **exported EventBridge bus** with the following format:
+```json
 {
-  "detail": "Send Message",
-  "details-type": { /* sendMessage payload */ }
+  "detail-type": "Send Chat Action",
+  "detail": {
+    "chat_id": 1234567,
+    "action": "typing"
+  }
 }
 ```
 
-Event's details need to have the same format as [sendMessage](https://core.telegram.org/bots/api#sendmessage) API payload:
+## Send a message
+
+In order to send a message through the Telegram bot send an event to the **exported EventBridge bus** with the following format:
+```json
+{
+  "detail-type": "Send Message",
+  "detail": {
+    "chat_id": 1234567,
+    "text": "this is an **example** message"
+  }
+}
+```
 
 ## Credits
 
