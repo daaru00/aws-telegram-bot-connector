@@ -1,0 +1,41 @@
+StartAt: SendTyping
+States:
+  SendTyping:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Chat Action
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            action: typing
+    ResultPath: null
+    Next: ParseData
+
+  ParseData:
+    Type: Pass
+    Parameters:
+      data.$: "States.StringToJson($.detail.message.web_app_data.data)"
+    ResultPath: $.web_app_data_parsed
+    Next: Wait
+
+  Wait:
+    Type: Wait
+    Seconds: 1
+    Next: SendResponse
+
+  SendResponse:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text.$: "States.Format('Data received: {} {}', $.web_app_data_parsed.data.input1, $.web_app_data_parsed.data.input2)"
+    ResultPath: null
+    End: true

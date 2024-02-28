@@ -1,0 +1,49 @@
+StartAt: RemoveInlineKeyboard
+States:
+  RemoveInlineKeyboard:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Edit Message
+          Detail:
+            chat_id.$: $.detail.callback_query.message.chat.id
+            message_id.$: $.detail.callback_query.message.message_id
+            text.$: "States.Format('Selected: {}', $.detail.callback_query.data)"
+    ResultPath: null
+    Next: SendTyping
+
+  SendTyping:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Chat Action
+          Detail:
+            chat_id.$: $.detail.callback_query.message.chat.id
+            action: typing
+    ResultPath: null
+    Next: Wait
+
+  Wait:
+    Type: Wait
+    Seconds: 1
+    Next: SendResponse
+
+  SendResponse:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message
+          Detail:
+            chat_id.$: $.detail.callback_query.message.chat.id
+            text: "Done"
+    ResultPath: null
+    End: true

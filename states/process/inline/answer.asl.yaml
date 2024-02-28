@@ -1,0 +1,33 @@
+StartAt: SendResponse
+States:
+  SendResponse:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Answer Inline Query
+          Detail:
+            inline_query_id.$: $.detail.inline_query.id
+            results:
+              - type: 'article'
+                id.$: "States.UUID()"
+                title: "RESULT 1"
+                input_message_content: 
+                  message_text: "TEXT 1"
+                  parse_mode: "MarkdownV2"
+              - type: 'article'
+                id.$: "States.UUID()"
+                title: "RESULT 2"
+                input_message_content: 
+                  message_text: "TEXT 2"
+                  parse_mode: "MarkdownV2"
+              - type: 'article'
+                id.$: "States.UUID()"
+                title: "RESULT 3"
+                input_message_content: 
+                  message_text: "TEXT 3"
+                  parse_mode: "MarkdownV2"
+    ResultPath: null
+    End: true

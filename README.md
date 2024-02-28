@@ -16,17 +16,31 @@ This application create an API Gateway endpoint to listen for webhook request, a
 
 Using the [SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html):
 ```bash
-sam build
 sam deploy --guided
+```
+
+Optionally deploy the example process handlers for `/start`, `/keyboard`, `/inline` and `/webapp` commands:
+```bash
+sam deploy --template template.process.yaml --guided
+```
+or a session example with command `/ask`, `/cancel`:
+```bash
+sam deploy --template template.session.yaml --guided
+```
+or a bedrock example:
+```bash
+sam deploy --template template.bedrock.yaml --guided
 ```
 
 ## Parameters
 
 - **TelegramBotToken**: Telegram bot token.
 
-- **TelegramIPsWhitelist**: Comma separate list of IPs of permitted senders IP, leave empty to disable whitelist.
+- **TelegramIPsWhitelist**: Comma separate list of IPs of permitted [senders IP](https://core.telegram.org/bots/webhooks#the-short-version), leave empty to disable whitelist.
 
 - **TelegramApiEndpoint**: Telegram API endpoint.
+
+- **EventsLogRetentionInDays**: Log retention in days.
 
 - **UsernameWhitelist**: Allowed usernames, separated by comma.
 
@@ -43,28 +57,6 @@ sam deploy --guided
 ## Telegram bot configurations
 
 Create a new bot talking to **@BotFather** and copy the provide token (needed for **TelegramBotToken** parameter).
-
-### Retrieve list of sender IPs
-
-Telegram report [which IPs](https://core.telegram.org/bots/webhooks#the-short-version) they’re sending webhook from.
-
-Here the latest values:
-```
-149.154.160.0/20
-91.108.4.0/22
-```
-
-### Retrieve updates
-
-Retrieve bot updates navigating to `https://api.telegram.org/bot<here the bot token>/getUpdates`.
-
-You should see a response like this:
-```json
-{"ok":true,"result":[{"update_id":1234567890,
-"message":{"message_id":10,"from":{"id":1234567890,"is_bot":false,"first_name":"Fabio","username":"daaru","language_code":"it"},"chat":{"id":1234567890,"first_name":"Fabio","username":"daaru","type":"private"},"date":1234567890,"text":"test"}}]}
-```
-
-The `chat.id` is the value to use in **TelegramChatsWhitelist** parameter.
 
 ### Check Webhook
 
@@ -87,22 +79,39 @@ You should see a response like this:
 {"ok":true,"result":true,"description":"Webhook was set"}
 ```
 
-## Receive a message
+## Receive a webhook event
 
 When a message is sent to the bot (and the username whitelist pass) this application send an event to the **exported EventBridge bus** with the following format:
 ```js
 {
     "source": "org.telegram.webhook",
-    "detail-type": "Message Received",
-    "detail": { /* Update object */ }
+    "detail-type": "Webhook Event Received",
+    "detail": {
+      "message": {
+          "message_id": 6,
+          "from": {
+              /** [...] */
+          },
+          "chat": {
+              /** [...] */
+          },
+          "date": 1708773749,
+          "text": "/start",
+          "entities": []
+      }
+    }
 }
 ```
 
-Event's details as the same format as [Update](https://core.telegram.org/bots/api#update) object.
+More information about events payload can be found on the [Telegram documentation page](https://core.telegram.org/bots/webhooks).
 
-## Send chat action
+## Api and actions
 
-To trigger a chat event send an event send an event to the **exported EventBridge bus** with the following format:
+Telegram APIs can be invoked sending an event into the **exported EventBridge bus**.
+
+### Send chat action
+
+To trigger a chat event send an event with the following format:
 ```json
 {
   "detail-type": "Send Chat Action",
@@ -113,9 +122,9 @@ To trigger a chat event send an event send an event to the **exported EventBridg
 }
 ```
 
-## Send a message
+### Send a message
 
-In order to send a message through the Telegram bot send an event to the **exported EventBridge bus** with the following format:
+In order to send a message through the Telegram bot send an event with the following format:
 ```json
 {
   "detail-type": "Send Message",
@@ -125,6 +134,230 @@ In order to send a message through the Telegram bot send an event to the **expor
   }
 }
 ```
+
+### Edit a message
+
+To edit a previously sent message:
+```json
+{
+  "detail-type": "Edit Message",
+  "detail": {
+    "chat_id": 1234567,
+    "message_id": 89012345,
+    "text": "this is an **example** message (edited)"
+  }
+}
+```
+
+It is common to use this API when receiving the button press callback from the inline keyboard to delete buttons.
+
+### Inline keyboard
+
+Send a message with an inline buttons:
+```json
+{
+  "detail-type": "Send Message",
+  "detail": {
+    "chat_id": 1234567,
+    "text": "Select a response:",
+    "keyboard": [{ "text": "Yes", "callback_data": "yes" }, { "text": "No", "callback_data": "no" }]
+  }
+}
+```
+
+Receive the callback event when the user click on one of the buttons:
+```js
+{
+    "source": "org.telegram.webhook",
+    "detail-type": "Webhook Event Received",
+    "detail": {
+      "callback_query": {
+          "id": "",
+          "from": {
+              /** [...] */
+          },
+          "message": {
+              "message_id": 18,
+              "from": {
+                  /** [...] */
+              },
+              "chat": {
+                  /** [...] */
+              },
+              "date": 1708776729,
+              "text": "/command",
+              "entities": [],
+              "reply_markup": {
+                  "inline_keyboard": [
+                      [
+                          {
+                              "text": "Stop",
+                              "callback_data": "string"
+                          }
+                      ]
+                  ]
+              }
+          },
+          "chat_instance": "",
+          "data": "string"
+      }
+  }
+}
+```
+
+### Keyboard
+
+Send a message with custom keyboard buttons:
+```json
+{
+  "detail-type": "Send Message With Keyboard",
+  "detail": {
+    "chat_id": 1234567,
+    "text": "Select a response:",
+    "keyboard": [
+      [{ "text": "Yes" }, { "text": "No"  }],
+      [{ "text": "Cancel" }]
+    ]
+  }
+}
+```
+
+When user click on one button a message is automatically sent with the content of "text" property.
+
+## WebApp
+
+Send a message with custom keyboard button that open a web app:
+```json
+{
+  "detail-type": "Send Message With Keyboard",
+  "detail": {
+    "chat_id": 1234567,
+    "text": "Open web app from keyboard:",
+    "keyboard": [
+      [{ "text": "Open", "web_app": { "url": "https://example.com" } }]
+    ]
+  }
+}
+```
+
+A super easy example can be found into the HTML file `webapp/index.html`. 
+It just describe the Telegram library:
+```html
+<script src="https://telegram.org/js/telegram-web-app.js" onload="init()"></script>
+```
+its initialization:
+```js
+function init(params) {
+  console.log('Telegram WebApp ready!');
+
+  var WebApp = window.Telegram.WebApp;
+  console.log({ WebApp });
+  WebApp.ready();
+}
+```
+a simple form:
+```html
+<form id="form">
+  <p>
+    <label for="input1">
+      Input 1
+    </label>
+    <input name="input1" id="input1" type="text" />
+  </p>
+  <p>
+    <label for="input2">
+      Input 2
+    </label>
+    <input name="input2" id="input2" type="text" />
+  </p>
+</form>
+```
+and the main button action handler:
+```js
+var MainButton = WebApp.MainButton;
+  console.log({ MainButton });
+
+  MainButton.setText('Ok');
+  MainButton.show();
+  MainButton.enable();
+  MainButton.onClick((event) => {
+    var form = document.getElementById('form')
+    var formData = new FormData(form)
+
+    // click handler
+  });
+```
+
+Using `WebApp.sendData` the web app will return back information:
+```js
+// click handler
+WebApp.sendData(JSON.stringify({ 
+  input1: formData.get('input1'),
+  input2: formData.get('input2')
+}));
+```
+
+The webhook endpoint will receive a callback event containing the data, here the corresponding event:
+```js
+{
+    "source": "org.telegram.webhook",
+    "detail-type": "Webhook Event Received",
+    "detail": {
+      "message": {
+          "message_id": 1234567,
+          "from": {
+              /** [...] */
+          },
+          "chat": {
+              /** [...] */
+          },
+          "web_app_data": {
+            "data": "{\"test\": 123}"
+          }
+      }
+    }
+}
+```
+
+## Inline mode
+
+You can enable the inline mode for your bot taking talking to **@BotFather**.
+Once enabled the bot can be triggered via an inline search from message, like:
+```
+@my_bot_name_bot test
+``` 
+
+When a user stop typing the search query the webhook endpoint will receive a callback event containing the data, here the corresponding event:
+```js
+{
+    "source": "org.telegram.webhook",
+    "detail-type": "Webhook Event Received",
+    "detail": {
+      "inline_query": {
+          "id": 1234567,
+          "from": {
+              /** [...] */
+          },
+          "query": "test"
+      }
+    }
+}
+```
+
+Answer to the request sending an event like:
+```json
+{
+  "detail-type": "Answer Inline Query",
+  "detail": {
+    "inline_query_id": 1234567,
+    "results": [
+      
+    ]
+  }
+}
+```
+
+More information about results response can be found on the [Telegram documentation page](https://core.telegram.org/bots/api#answerinlinequery).
 
 ## Credits
 

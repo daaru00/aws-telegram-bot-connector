@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: Telegram Bot Connector
+
+Parameters:
+  EventBus:
+    Type: String
+    Description: "The connector event bus name"
+  UsernameWhitelist:
+    Type: CommaDelimitedList
+    Description: "Allowed usernames, separated by comma"
+    Default: ""
+  WelcomeText:
+    Type: String
+    Description: "Bot welcome text"
+    Default: "Hello, I am a bot that ask you few inputs. Start session sending command /ask. Stop session in any moment sending command /cancel"
+
+Conditions:
+  IsUsernameWhitelistEnabled: !Not [ !Equals [ !Join [ "", !Ref UsernameWhitelist ], "" ] ]
+
+Resources:
+  SessionTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub "${AWS::StackName}-session"
+      PrimaryKey:
+        Name: chat_id
+        Type: Number
+
+  StartReceivedStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-start"
+      DefinitionUri: states/session/start.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+        WelcomeText: !Ref WelcomeText
+        SessionTable: !Ref SessionTable
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+        - DynamoDBWritePolicy:
+            TableName: !Ref SessionTable
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                message:
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exists: true
+                  text:
+                    - "/start"
+
+  MessageReceivedStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-message"
+      DefinitionUri: states/session/message.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+        SessionTable: !Ref SessionTable
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+        - DynamoDBReadPolicy:
+            TableName: !Ref SessionTable
+        - DynamoDBWritePolicy:
+            TableName: !Ref SessionTable
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                message:
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exist: true
+                  text:
+                    - anything-but: 
+                        - "/start"

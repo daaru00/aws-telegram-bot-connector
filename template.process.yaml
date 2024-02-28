@@ -1,0 +1,289 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: Telegram Bot Connector
+
+Parameters:
+  EventBus:
+    Type: String
+    Description: "The connector event bus name"
+  UsernameWhitelist:
+    Type: CommaDelimitedList
+    Description: "Allowed usernames, separated by comma"
+    Default: ""
+  MenuType:
+    Type: String
+    Description: "Chat menu type"
+    Default: "default"
+    AllowedValues:
+      - "default"
+      - "commands"
+      - "web_app"
+  WelcomeText:
+    Type: String
+    Description: "Bot welcome text"
+    Default: "Hello, I am a bot that send back the text you send me. Use commands /keyboard, /inline or /webapp for some examples"
+  WebAppUrl:
+    Type: String
+    Description: "Web App URL"
+    Default: ""
+
+Conditions:
+  IsUsernameWhitelistEnabled: !Not [ !Equals [ !Join [ "", !Ref UsernameWhitelist ], "" ] ]
+
+Resources:
+
+  StartReceivedStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-start"
+      DefinitionUri: states/process/start.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+        WelcomeText: !Ref WelcomeText
+        MenuType: !Ref MenuType
+        WebAppUrl: !Ref WebAppUrl
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                message:
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exists: true
+                  text:
+                    - "/start"
+
+  CommandInlineStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-command-inline"
+      DefinitionUri: states/process/commands/inline.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                message:
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exists: true
+                  text:
+                    - "/inline"
+
+  CommandKeyboardStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-command-keyboard"
+      DefinitionUri: states/process/commands/keyboard.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                message:
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exists: true
+                  text:
+                    - "/keyboard"
+
+  CommandWebAppStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-command-webapp"
+      DefinitionUri: states/process/commands/webapp.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+        WebAppUrl: !Ref WebAppUrl
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                message:
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exists: true
+                  text:
+                    - "/webapp"
+
+  CallbackInlineStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-callback-inline"
+      DefinitionUri: states/process/callbacks/inline.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                callback_query:
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exists: true
+
+  WebAppCallbackStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-webapp-callback"
+      DefinitionUri: states/process/webapp/callback.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                message:
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exists: true
+                  web_app_data:
+                    data:
+                      - exists: true
+
+  InlineAnswerStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-inline-answer"
+      DefinitionUri: states/process/inline/answer.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                inline_query:
+                  id:
+                    - exists: true
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exists: true
+
+  MessageReceivedStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-message"
+      DefinitionUri: states/process/message.asl.yaml
+      DefinitionSubstitutions:
+        EventBusName: !Ref EventBus
+        EventSource: !Ref AWS::StackName
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EventBus
+      Events:
+        ReceivedEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: !Ref EventBus
+            Pattern:
+              source:
+                - org.telegram.webhook
+              detail-type:
+                - 'Webhook Event Received'
+              detail:
+                message:
+                  from:
+                    username: !If 
+                      - IsUsernameWhitelistEnabled
+                      - !Ref UsernameWhitelist
+                      - - exists: true
+                  text:
+                    - anything-but: 
+                        - "/start"
+                        - "/inline"
+                        - "/keyboard"
+                        - "/webapp"

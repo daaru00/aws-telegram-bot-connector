@@ -1,0 +1,96 @@
+StartAt: SetParameters
+States: 
+  SetParameters:
+    Type: Pass
+    Parameters: 
+      MenuType: '${MenuType}'
+      WebAppUrl: '${WebAppUrl}'
+    ResultPath: $.params
+    Next: CheckMenuType
+
+  CheckMenuType:
+    Type: Choice
+    Choices:
+      - Variable: $.params.MenuType
+        StringEquals: 'commands'
+        Next: SetChatMenuCommands
+      - Variable: $.params.MenuType
+        StringEquals: 'web_app'
+        Next: SetChatMenuWebApp
+    Default: SetChatMenuDefault
+
+  SetChatMenuDefault:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Set Chat Menu Button
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            menu_button: 
+              type: default
+    ResultPath: null
+    Next: SendTyping
+
+  SetChatMenuCommands:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Set Chat Menu Button
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            menu_button: 
+              type: commands
+    ResultPath: null
+    Next: SendTyping
+
+  SetChatMenuWebApp:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Set Chat Menu Button
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            menu_button: 
+              type: web_app
+              text: Settings
+              web_app:
+                url: "${WebAppUrl}"
+    ResultPath: null
+    Next: SendTyping
+
+  SendTyping:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Chat Action
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            action: typing
+    ResultPath: null
+    Next: SendWelcome
+
+  SendWelcome:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text: '${WelcomeText}'
+    ResultPath: null
+    End: true

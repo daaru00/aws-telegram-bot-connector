@@ -1,0 +1,68 @@
+StartAt: CheckStartCommand
+States:
+  CheckStartCommand:
+    Type: Choice
+    Choices:
+      - Variable: $.detail.message.text
+        StringEquals: "/start"
+        Next: OverrideWelcomePrompt
+    Default: SetPrompt
+
+  SetPrompt:
+    Type: Pass
+    Parameters:
+      text.$: $.detail.message.text
+    ResultPath: $.prompt
+    Next: SendTyping
+  
+  OverrideWelcomePrompt:
+    Type: Pass
+    Parameters:
+      text.$: "States.Format('${BotInstructions}\n\nLanguage: \"{}\"\nQuestion: Present yourself in one sentence\nResponse: ', $.detail.message.from.language_code)"
+    ResultPath: $.prompt
+    Next: SendTyping
+
+  SendTyping:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Chat Action
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            action: typing
+    ResultPath: null
+    Next: GenerateResponse
+
+  GenerateResponse:
+    Type: Task
+    Resource: 'arn:aws:states:::bedrock:invokeModel'
+    Parameters:
+      ModelId: ${BedRockModelId}
+      Body:
+        prompt.$: "States.Format('${BotInstructions}\n\nLanguage: \"{}\"\nQuestion: {}\nResponse: ', $.detail.message.from.language_code, $.prompt.text)"
+        maxTokens: 200
+        temperature: 0.7
+        topP: 1
+      ContentType: "application/json"
+      Accept: "*/*"
+    ResultSelector:
+      text.$: $.Body.completions[0].data.text
+    ResultPath: $.result
+    Next: SendResponse
+  
+  SendResponse:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text.$: $.result.text
+    ResultPath: null
+    End: true

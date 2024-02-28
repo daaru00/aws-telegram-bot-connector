@@ -1,0 +1,38 @@
+StartAt: SendTyping
+States:
+  SendTyping:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Chat Action
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            action: typing
+    ResultPath: null
+    Next: Wait
+
+  Wait:
+    Type: Wait
+    Seconds: 1
+    Next: SendResponse
+
+  SendResponse:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message With Keyboard
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text: "Select a response from custom keyboard"
+            keyboard: 
+              - - text: 'Yes'
+                - text: 'No'
+              - - text: 'Cancel'
+    ResultPath: null
+    End: true

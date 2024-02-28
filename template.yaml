@@ -16,17 +16,17 @@ Parameters:
     Type: String
     Description: "Telegram API endpoint"
     Default: "https://api.telegram.org"
-  UsernameWhitelist:
-    Type: CommaDelimitedList
-    Description: "Allowed usernames, separated by comma"
-    Default: ""
-  WelcomeText:
+  EventsLogRetentionInDays:
+    Type: Number
+    Description: "Log retention in days"
+    Default: 7
+  TextParseMode:
     Type: String
-    Description: "Bot welcome text"
-    Default: "Hello, I am a bot that send back the text you send me"
-
-Conditions:
-  IsUsernameWhitelistEnabled: !Not [ !Equals [ !Join [ "", !Ref UsernameWhitelist ], "" ] ]
+    Description: "Test parse mode"
+    Default: "MarkdownV2"
+    AllowedValues:
+      - "MarkdownV2"
+      - "HTML"
 
 Resources:
       
@@ -47,7 +47,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/events/${EventBus}"
-      RetentionInDays: 7
+      RetentionInDays: !Ref EventsLogRetentionInDays
   
   LogsRule:
     Type: AWS::Events::Rule
@@ -180,7 +180,7 @@ Resources:
       InvocationRateLimitPerSecond: 10
 
   ##
-  # Telegram API mapping
+  # Telegram settings API mapping
   ##
 
   SetWebhookRule:
@@ -205,6 +205,34 @@ Resources:
                 "url": "<url>"
               }
 
+  SetChatMenuButtonRule:
+    Type: AWS::Events::Rule
+    Properties:
+      State: ENABLED
+      EventBusName: !Ref EventBus
+      EventPattern:
+        detail-type: ['Set Chat Menu Button']
+      Targets:
+        - Id: telegram-destination
+          Arn: !GetAtt BotApiDestination.Arn
+          RoleArn: !GetAtt EventsApiDestinationRole.Arn
+          HttpParameters:
+            PathParameterValues:
+              - 'setChatMenuButton'
+          InputTransformer:
+            InputPathsMap:
+              "chat_id": "$.detail.chat_id"
+              "menu_button": "$.detail.menu_button"
+            InputTemplate: |
+              {
+                "chat_id": "<chat_id>",
+                "menu_button": <menu_button>
+              }
+
+  ##
+  # Telegram message API mapping
+  ##
+
   SendMessageRule:
     Type: AWS::Events::Rule
     Properties:
@@ -223,12 +251,106 @@ Resources:
             InputPathsMap:
               "chat_id": "$.detail.chat_id"
               "text": "$.detail.text"
-            InputTemplate: |
+            InputTemplate: !Sub |
               {
                 "chat_id": "<chat_id>",
                 "text": "<text>",
-                "parse_mode": "MarkdownV2"
+                "parse_mode": "${TextParseMode}",
+                "reply_markup": {
+                  "remove_keyboard": true
+                }
               }
+
+  EditMessageRule:
+    Type: AWS::Events::Rule
+    Properties:
+      State: ENABLED
+      EventBusName: !Ref EventBus
+      EventPattern:
+        detail-type: ['Edit Message']
+      Targets:
+        - Id: telegram-destination
+          Arn: !GetAtt BotApiDestination.Arn
+          RoleArn: !GetAtt EventsApiDestinationRole.Arn
+          HttpParameters:
+            PathParameterValues:
+              - 'editMessageText'
+          InputTransformer:
+            InputPathsMap:
+              "chat_id": "$.detail.chat_id"
+              "message_id": "$.detail.message_id"
+              "text": "$.detail.text"
+            InputTemplate: !Sub |
+              {
+                "chat_id": "<chat_id>",
+                "message_id": "<message_id>",
+                "text": "<text>",
+                "parse_mode": "${TextParseMode}"
+              }
+
+  SendMessageWithKeyboardRule:
+    Type: AWS::Events::Rule
+    Properties:
+      State: ENABLED
+      EventBusName: !Ref EventBus
+      EventPattern:
+        detail-type: ['Send Message With Keyboard']
+      Targets:
+        - Id: telegram-destination
+          Arn: !GetAtt BotApiDestination.Arn
+          RoleArn: !GetAtt EventsApiDestinationRole.Arn
+          HttpParameters:
+            PathParameterValues:
+              - 'sendMessage'
+          InputTransformer:
+            InputPathsMap:
+              "chat_id": "$.detail.chat_id"
+              "text": "$.detail.text"
+              "keyboard": "$.detail.keyboard"
+            InputTemplate: !Sub |
+              {
+                "chat_id": "<chat_id>",
+                "text": "<text>",
+                "parse_mode": "${TextParseMode}",
+                "reply_markup": {
+                  "keyboard": <keyboard>,
+                  "one_time_keyboard": true,
+                  "resize_keyboard": true
+                }
+              }
+              
+  SendMessageWithInlineKeyboardRule:
+    Type: AWS::Events::Rule
+    Properties:
+      State: ENABLED
+      EventBusName: !Ref EventBus
+      EventPattern:
+        detail-type: ['Send Message With Inline Keyboard']
+      Targets:
+        - Id: telegram-destination
+          Arn: !GetAtt BotApiDestination.Arn
+          RoleArn: !GetAtt EventsApiDestinationRole.Arn
+          HttpParameters:
+            PathParameterValues:
+              - 'sendMessage'
+          InputTransformer:
+            InputPathsMap:
+              "chat_id": "$.detail.chat_id"
+              "text": "$.detail.text"
+              "keyboard": "$.detail.keyboard"
+            InputTemplate: !Sub |
+              {
+                "chat_id": "<chat_id>",
+                "text": "<text>",
+                "parse_mode": "${TextParseMode}",
+                "reply_markup": {
+                  "inline_keyboard": [<keyboard>]
+                }
+              }
+
+  ##
+  # Telegram actions API mapping
+  ##
 
   SendChatActionRule:
     Type: AWS::Events::Rule
@@ -252,6 +374,34 @@ Resources:
               {
                 "chat_id": "<chat_id>",
                 "action": "<action>"
+              }
+
+  ##
+  # Telegram callbacks API mapping
+  ##
+
+  AnswerWebAppQueryRule:
+    Type: AWS::Events::Rule
+    Properties:
+      State: ENABLED
+      EventBusName: !Ref EventBus
+      EventPattern:
+        detail-type: ['Answer Inline Query']
+      Targets:
+        - Id: telegram-destination
+          Arn: !GetAtt BotApiDestination.Arn
+          RoleArn: !GetAtt EventsApiDestinationRole.Arn
+          HttpParameters:
+            PathParameterValues:
+              - 'answerInlineQuery'
+          InputTransformer:
+            InputPathsMap:
+              "inline_query_id": "$.detail.inline_query_id"
+              "results": "$.detail.results"
+            InputTemplate: |
+              {
+                "inline_query_id": "<inline_query_id>",
+                "results": <results>
               }
 
   ##
@@ -338,7 +488,7 @@ Resources:
                 passthroughBehavior: "when_no_templates"
 
   ##
-  # StepFunctions for process management
+  # StepFunctions for connector management
   ##
 
   InstallStateMachine:
@@ -369,69 +519,6 @@ Resources:
                 status-details:
                   status:
                     - CREATE_COMPLETE
-
-  StartReceivedStateMachine:
-    Type: AWS::Serverless::StateMachine
-    Properties:
-      Name: !Sub "${AWS::StackName}-start"
-      DefinitionUri: states/start.asl.yaml
-      DefinitionSubstitutions:
-        EventBusName: !Ref EventBus
-        EventSource: !Ref AWS::StackName
-        WelcomeText: !Ref WelcomeText
-      Policies:
-        - EventBridgePutEventsPolicy:
-            EventBusName: !Ref EventBus
-      Events:
-        ReceivedEvent:
-          Type: EventBridgeRule
-          Properties:
-            EventBusName: !Ref EventBus
-            Pattern:
-              source:
-                - org.telegram.webhook
-              detail-type:
-                - 'Webhook Event Received'
-              detail:
-                message:
-                  from:
-                    username: !If 
-                      - IsUsernameWhitelistEnabled
-                      - !Ref UsernameWhitelist
-                      - - exists: true
-                  text:
-                    - "/start"
-
-  MessageReceivedStateMachine:
-    Type: AWS::Serverless::StateMachine
-    Properties:
-      Name: !Sub "${AWS::StackName}-message"
-      DefinitionUri: states/message.asl.yaml
-      DefinitionSubstitutions:
-        EventBusName: !Ref EventBus
-        EventSource: !Ref AWS::StackName
-      Policies:
-        - EventBridgePutEventsPolicy:
-            EventBusName: !Ref EventBus
-      Events:
-        ReceivedEvent:
-          Type: EventBridgeRule
-          Properties:
-            EventBusName: !Ref EventBus
-            Pattern:
-              source:
-                - org.telegram.webhook
-              detail-type:
-                - 'Webhook Event Received'
-              detail:
-                message:
-                  from:
-                    username: !If 
-                      - IsUsernameWhitelistEnabled
-                      - !Ref UsernameWhitelist
-                      - - exist: true
-                  text:
-                    - anything-but: "/start"
 
 Outputs:
   WebhookEndpoint:

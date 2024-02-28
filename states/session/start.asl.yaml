@@ -1,0 +1,46 @@
+StartAt: InitSession
+States: 
+  InitSession:
+    Type: Task
+    Resource: 'arn:aws:states:::dynamodb:putItem'
+    Parameters:
+      TableName: ${SessionTable}
+      Item:
+        chat_id:
+          N.$: "States.Format('{}', $.detail.message.chat.id)"
+        status:
+          S: ''
+        input1:
+          S: ''
+        input2:
+          S: ''
+    ResultPath: null
+    Next: SendTyping
+
+  SendTyping:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Chat Action
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            action: typing
+    ResultPath: null
+    Next: SendWelcome
+
+  SendWelcome:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text: '${WelcomeText}'
+    ResultPath: null
+    End: true

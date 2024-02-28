@@ -1,0 +1,215 @@
+StartAt: GetSession
+States: 
+  GetSession:
+    Type: Task
+    Resource: 'arn:aws:states:::dynamodb:getItem'
+    Parameters:
+      TableName: ${SessionTable}
+      Key:
+        chat_id:
+          N.$: "States.Format('{}', $.detail.message.chat.id)"
+    ResultSelector:
+      status.$: $.Item.status.S
+      input1.$: $.Item.input1.S
+      input2.$: $.Item.input2.S
+    ResultPath: $.session
+    Next: SendTyping
+
+  SendTyping:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Chat Action
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            action: typing
+    ResultPath: null
+    Next: CheckStatus
+
+  CheckStatus:
+    Type: Choice
+    Choices:
+      - Variable: $.detail.message.text
+        StringEquals: '/ask'
+        Next: AskInput1
+      - Variable: $.detail.message.text
+        StringEquals: '/cancel'
+        Next: SetStatusCancel
+      - Variable: $.session.status
+        StringEquals: 'input1'
+        Next: SaveInput1
+      - Variable: $.session.status
+        StringEquals: 'input2'
+        Next: CheckInput2
+    Default: SendNotRecognized
+    
+  AskInput1:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text: "Insert input1:"
+    ResultPath: null
+    Next: SetStatusInput1
+
+  SetStatusInput1:
+    Type: Pass
+    Parameters:
+      status: 'input1'
+      input1.$: $.session.input1
+      input2.$: $.session.input2
+    ResultPath: $.session
+    Next: SaveSession
+
+  SaveInput1:
+    Type: Pass
+    Parameters:
+      status.$: $.session.status
+      input1.$: $.detail.message.text
+      input2.$: $.session.input2
+    ResultPath: $.session
+    Next: AskInput2
+
+  AskInput2:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message With Keyboard
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text: "Select input2:"
+            keyboard: 
+              - - text: 'First'
+              - - text: 'Second'
+              - - text: 'Third'
+    ResultPath: null
+    Next: SetStatusInput2
+
+  SetStatusInput2:
+    Type: Pass
+    Parameters:
+      status: 'input2'
+      input1.$: $.session.input1
+      input2.$: $.session.input2
+    ResultPath: $.session
+    Next: SaveSession
+
+  CheckInput2:
+    Type: Choice
+    Choices:
+      - Variable: $.detail.message.text
+        StringEquals: First
+        Next: SaveInput2
+      - Variable: $.detail.message.text
+        StringEquals: Second
+        Next: SaveInput2
+      - Variable: $.detail.message.text
+        StringEquals: Third
+        Next: SaveInput2
+    Default: RespondNotValidInput2
+
+  RespondNotValidInput2:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message With Keyboard
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text: "Not valid, select input2:"
+            keyboard: 
+              - - text: 'First'
+              - - text: 'Second'
+              - - text: 'Third'
+    ResultPath: null
+    Next: SaveSession
+
+  SaveInput2:
+    Type: Pass
+    Parameters:
+      status: ''
+      input1.$: $.session.input1
+      input2.$: $.detail.message.text
+    ResultPath: $.session
+    Next: SendResponse
+
+  SendNotRecognized:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text: "Send command /ask and start the process"
+    ResultPath: null
+    Next: SaveSession
+
+  SetStatusCancel:
+    Type: Pass
+    Parameters:
+      status: ''
+      input1: ''
+      input2: ''
+    ResultPath: $.session
+    Next: SendCanceled
+
+  SendCanceled:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text: "Session canceled, send /ask to strt a new session"
+    ResultPath: null
+    Next: SaveSession
+
+  SendResponse:
+    Type: Task
+    Resource: 'arn:aws:states:::events:putEvents'
+    Parameters:
+      Entries:
+        - EventBusName: ${EventBusName}
+          Source: ${EventSource}
+          DetailType: Send Message
+          Detail:
+            chat_id.$: $.detail.message.chat.id
+            text.$: "States.Format('All inputs sent: {} {}', $.session.input1, $.session.input2)"
+    ResultPath: null
+    Next: SaveSession
+
+  SaveSession:
+    Type: Task
+    Resource: 'arn:aws:states:::dynamodb:putItem'
+    Parameters:
+      TableName: ${SessionTable}
+      Item:
+        chat_id:
+          N.$: "States.Format('{}', $.detail.message.chat.id)"
+        status:
+          S.$: $.session.status
+        input1:
+          S.$: $.session.input1
+        input2:
+          S.$: $.session.input2
+    ResultPath: null
+    End: true

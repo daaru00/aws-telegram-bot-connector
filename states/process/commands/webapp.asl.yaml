@@ -1,5 +1,5 @@
 StartAt: SendTyping
-States: 
+States:
   SendTyping:
     Type: Task
     Resource: 'arn:aws:states:::events:putEvents'
@@ -16,19 +16,23 @@ States:
 
   Wait:
     Type: Wait
-    Seconds: 2
-    Next: SendWelcome
+    Seconds: 1
+    Next: SendResponse
 
-  SendWelcome:
+  SendResponse:
     Type: Task
     Resource: 'arn:aws:states:::events:putEvents'
     Parameters:
       Entries:
         - EventBusName: ${EventBusName}
           Source: ${EventSource}
-          DetailType: Send Message
+          DetailType: Send Message With Keyboard
           Detail:
             chat_id.$: $.detail.message.chat.id
-            text: '${WelcomeText}'
+            text: "Open web app from keyboard"
+            keyboard:
+              - - text: 'Open'
+                  web_app: 
+                    url: "${WebAppUrl}"
     ResultPath: null
     End: true

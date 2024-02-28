@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Telegram Web App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: "Roboto", sans-serif;
+        font-weight: 400;
+        font-style: normal;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Settings</h1>
+
+    <form id="form">
+      <p>
+        <label for="input1">
+          Input 1
+        </label>
+        <input name="input1" id="input1" type="text" />
+      </p>
+      <p>
+        <label for="input2">
+          Input 2
+        </label>
+        <input name="input2" id="input2" type="text" />
+      </p>
+    </form>
+
+    <script>
+      function init(params) {
+        console.log('Telegram WebApp ready!');
+
+        var WebApp = window.Telegram.WebApp;
+        console.log({ WebApp });
+        WebApp.ready();
+
+        var MainButton = WebApp.MainButton;
+        console.log({ MainButton });
+
+        MainButton.setText('Ok');
+        MainButton.show();
+        MainButton.enable();
+        MainButton.onClick((event) => {
+          var form = document.getElementById('form')
+          var formData = new FormData(form)
+
+          WebApp.sendData(JSON.stringify({ 
+            input1: formData.get('input1'),
+            input2: formData.get('input2')
+          }));
+        });
+      }
+    </script>
+    <script src="https://telegram.org/js/telegram-web-app.js" onload="init()"></script>
+  </body>
+</html>
